@@ -6,7 +6,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <title>KLM App — Keur Lemou</title>
-<!-- build v10 2026-10 : version autonome (Google Sheets + Apps Script), sans Claude ; base v9 2026-10-03 : annuler une saisie + bouton Sortir ; v8 (donnees remises a zero) : taches non prevues par espece (obligatoire) + fertilisation/desherbage/semis/pepiniere/triage/conditionnement/conservation + tout signalement a regler (bouton regler) -->
+<!-- build v11 : utilisateur Observateur (code lecture seule) ; v10 2026-10 : version autonome (Google Sheets + Apps Script), sans Claude ; base v9 2026-10-03 : annuler une saisie + bouton Sortir ; v8 (donnees remises a zero) : taches non prevues par espece (obligatoire) + fertilisation/desherbage/semis/pepiniere/triage/conditionnement/conservation + tout signalement a regler (bouton regler) -->
 <link rel="icon" type="image/png" href="icon-192.png">
 <meta name="theme-color" content="#1e4d2b">
 <meta name="apple-mobile-web-app-title" content="KLM App">
@@ -183,6 +183,10 @@ ul.chk li.done b{text-decoration:line-through;color:var(--muted)}
 .bye.show{display:flex}
 .bye h2{font-size:1.5rem}
 .bye p{margin:0;opacity:.9;max-width:300px}
+body.ro #app form, body.ro .xgrid, body.ro .xform, body.ro #detsaisie, body.ro [data-del], body.ro [data-fix], body.ro [data-fixok], body.ro [data-verif], body.ro [data-resolve], body.ro [data-refill], body.ro [data-pt], body.ro .scanbig, body.ro #btn-scan{display:none!important}
+body.ro .ck{pointer-events:none}
+body.ro .sect.card:has(.xgrid){display:none}
+body.ro .banner{background:var(--green)}
 dialog{border:1px solid var(--line);border-radius:14px;background:var(--panel);color:var(--ink);max-width:340px;width:90%}
 dialog::backdrop{background:rgba(20,23,15,.5)}
 </style>
@@ -382,14 +386,15 @@ function applyOps(st, ops){
   return st;
 }
 function queue(op){ const q = outLoad(); q.push(op); outSave(q); updateBanner(); flushSoon(); }
-function putRow(col, row){ if (!row.id) row.id = uid(); saveCache(); queue({op:'put', col, row:JSON.parse(JSON.stringify(row))}); }
-function delRow(col, row){ saveCache(); if (row && row.id) queue({op:'del', col, id:row.id}); }
+function putRow(col, row){ if (READONLY){ toast('Mode observation : lecture seule'); return; } if (!row.id) row.id = uid(); saveCache(); queue({op:'put', col, row:JSON.parse(JSON.stringify(row))}); }
+function delRow(col, row){ if (READONLY){ toast('Mode observation : lecture seule'); return; } saveCache(); if (row && row.id) queue({op:'del', col, id:row.id}); }
 let toastT = null;
 function toast(msg){
   const t = document.getElementById('toast'); t.textContent = msg; t.classList.add('show');
   clearTimeout(toastT); toastT = setTimeout(()=>t.classList.remove('show'), 2600);
 }
 function record(k, row, msg){
+  if (READONLY){ toast('Mode observation : lecture seule'); return; }
   row.id = uid(); S[k].push(row);
   render();
   putRow(k, row);
@@ -406,10 +411,17 @@ async function api(method, body){
   const opt = method==='GET' ? {method:'GET'} : {method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body:JSON.stringify(Object.assign({pin:PIN}, body))};
   const r = await fetch(url, opt);
   const j = await r.json();
+  if (j.role) setRole(j.role);
   if (!j.ok && j.err==='pin'){ NET = 'pin'; askPin(true); throw new Error('pin'); }
   if (!j.ok) throw new Error(j.err || 'erreur serveur');
   return j;
 }
+let READONLY = false; try{ READONLY = localStorage.getItem('kl_role')==='lecture'; }catch(e){}
+function setRole(r){ const ro = (r==='lecture'); try{ localStorage.setItem('kl_role', r); }catch(e){}
+  if (ro !== READONLY){ READONLY = ro; if (!ro){ USER = null; try{ document.getElementById('whodlg').showModal(); }catch(e){} } applyRole(); render(); } }
+function applyRole(){ document.body.classList.toggle('ro', READONLY);
+  if (READONLY){ USER = 'Observateur'; TAB = (TAB==='samba') ? 'tb' : TAB; document.getElementById('userchip').textContent = '\u{1F441} Observateur'; try{ const d = document.getElementById('whodlg'); if (d.open) d.close(); }catch(e){} }
+  updateBanner(); }
 function adopt(state){
   const q = outLoad();
   S = applyOps(normState(state), q);
@@ -453,6 +465,7 @@ function updateBanner(){
   else if (NET==='pin') t = 'Code de la ferme requis.';
   else if (NET==='offline') t = 'Hors connexion' + (n ? ' : ' + n + ' saisie' + (n>1?'s':'') + ' en attente, envoi automatique au retour du réseau.' : ' — les dernières données connues sont affichées.');
   else if (n) t = 'Envoi en cours : ' + n + ' saisie' + (n>1?'s':'') + '…';
+  if (typeof READONLY!=='undefined' && READONLY) t = '\u{1F441} Mode observation (lecture seule) \u2014 mise \u00e0 jour automatique chaque minute' + (t ? ' \u00b7 ' + t : '');
   b.textContent = t; b.classList.toggle('show', !!t);
 }
 
@@ -1174,13 +1187,15 @@ document.getElementById('userchip').addEventListener('click', ()=>{
   const dlg = document.getElementById('whodlg'); dlg.showModal();
 });
 document.getElementById('whodlg').addEventListener('close', function(){
+  if (READONLY){ applyRole(); render(); return; }
   if (this.returnValue) setUser(this.returnValue);
 });
 
 /* ---------- demarrage ---------- */
-if (USER){ document.getElementById('userchip').textContent = USER;
+if (READONLY){ applyRole(); TAB = 'tb'; }
+else if (USER){ document.getElementById('userchip').textContent = USER;
   TAB = (USER==='Madame') ? 'vente' : (USER.indexOf('Technicien')===0 ? 'journal' : 'tb'); }
-else { document.getElementById('userchip').textContent = 'moi ?'; setTimeout(()=>{ try{ document.getElementById('whodlg').showModal(); }catch(e){} }, 400); }
+else { document.getElementById('userchip').textContent = 'moi ?'; setTimeout(()=>{ try{ if (!READONLY) document.getElementById('whodlg').showModal(); }catch(e){} }, 1500); }
 /* cache local : l'appli s'ouvre instantanement, meme sans reseau */
 try{ const c = JSON.parse(localStorage.getItem(CACHE_KEY)||'null'); if (c) S = applyOps(normState(c), outLoad()); }catch(e){}
 document.getElementById('pinform').addEventListener('submit', ()=>{
