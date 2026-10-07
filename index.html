@@ -6,7 +6,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <title>KLM App — Keur Lemou</title>
-<!-- build v11 : utilisateur Observateur (code lecture seule) ; v10 2026-10 : version autonome (Google Sheets + Apps Script), sans Claude ; base v9 2026-10-03 : annuler une saisie + bouton Sortir ; v8 (donnees remises a zero) : taches non prevues par espece (obligatoire) + fertilisation/desherbage/semis/pepiniere/triage/conditionnement/conservation + tout signalement a regler (bouton regler) -->
+<!-- build v12 : taches du jour precises et reparties Ba / Djibril (inversees chaque jour) + achats (expression des besoins) dans Materiel ; v11 : utilisateur Observateur (code lecture seule) ; v10 2026-10 : version autonome (Google Sheets + Apps Script), sans Claude ; base v9 2026-10-03 : annuler une saisie + bouton Sortir ; v8 (donnees remises a zero) : taches non prevues par espece (obligatoire) + fertilisation/desherbage/semis/pepiniere/triage/conditionnement/conservation + tout signalement a regler (bouton regler) -->
 <link rel="icon" type="image/png" href="icon-192.png">
 <meta name="theme-color" content="#1e4d2b">
 <meta name="apple-mobile-web-app-title" content="KLM App">
@@ -183,7 +183,7 @@ ul.chk li.done b{text-decoration:line-through;color:var(--muted)}
 .bye.show{display:flex}
 .bye h2{font-size:1.5rem}
 .bye p{margin:0;opacity:.9;max-width:300px}
-body.ro #app form, body.ro .xgrid, body.ro .xform, body.ro #detsaisie, body.ro [data-del], body.ro [data-fix], body.ro [data-fixok], body.ro [data-verif], body.ro [data-resolve], body.ro [data-refill], body.ro [data-pt], body.ro .scanbig, body.ro #btn-scan{display:none!important}
+body.ro #app form, body.ro .xgrid, body.ro .xform, body.ro #detsaisie, body.ro [data-del], body.ro [data-fix], body.ro [data-fixok], body.ro [data-verif], body.ro [data-resolve], body.ro [data-refill], body.ro [data-pt], body.ro [data-achok], body.ro .scanbig, body.ro #btn-scan{display:none!important}
 body.ro .ck{pointer-events:none}
 body.ro .sect.card:has(.xgrid){display:none}
 body.ro .banner{background:var(--green)}
@@ -191,7 +191,7 @@ dialog{border:1px solid var(--line);border-radius:14px;background:var(--panel);c
 dialog::backdrop{background:rgba(20,23,15,.5)}
 </style>
 
-<script id="kl-state" type="application/json">{"v":1,"recoltes":[],"ventes":[],"ops":[],"attaques":[],"scans":[],"inventaire":[]}</script>
+<script id="kl-state" type="application/json">{"v":1,"recoltes":[],"ventes":[],"ops":[],"attaques":[],"scans":[],"inventaire":[],"achats":[]}</script>
 
 </head>
 <body>
@@ -227,8 +227,8 @@ dialog::backdrop{background:rgba(20,23,15,.5)}
     <div class="btnrow" style="flex-direction:column">
       <button class="btn" value="Mansour">Mansour</button>
       <button class="btn ghost" value="Madame">Madame — ventes &amp; récoltes</button>
-      <button class="btn ghost" value="Technicien 1">Technicien 1</button>
-      <button class="btn ghost" value="Technicien 2">Technicien 2</button>
+      <button class="btn ghost" value="Ba">Ba — technicien 1</button>
+      <button class="btn ghost" value="Djibril">Djibril — technicien 2</button>
       <button class="btn terre" value="Samba" style="font-size:1.15rem">🔦 📷  Samba</button>
     </div>
   </form>
@@ -242,6 +242,7 @@ dialog::backdrop{background:rgba(20,23,15,.5)}
 let S = JSON.parse(document.getElementById('kl-state').textContent);
 if (!S.scans) S.scans = [];
 if (!S.inventaire) S.inventaire = [];
+if (!S.achats) S.achats = [];
 
 /* ---------- referentiel : calendrier cultural v2 (demi-mois 0 = sept-1 2026 ... 11 = fev-2 2027) ---------- */
 const CAL = [
@@ -375,7 +376,7 @@ function uid(){ return Date.now().toString(36) + Math.random().toString(36).slic
 function outLoad(){ try{ return JSON.parse(localStorage.getItem(OUTBOX_KEY)||'[]'); }catch(e){ return []; } }
 function outSave(q){ try{ localStorage.setItem(OUTBOX_KEY, JSON.stringify(q)); }catch(e){ toast('Mémoire du téléphone pleine — envoie tes saisies dès que possible'); } }
 function saveCache(){ try{ localStorage.setItem(CACHE_KEY, JSON.stringify(S)); }catch(e){} }
-function emptyState(){ return {v:1, recoltes:[], ventes:[], ops:[], attaques:[], scans:[], inventaire:[]}; }
+function emptyState(){ return {v:1, recoltes:[], ventes:[], ops:[], attaques:[], scans:[], inventaire:[], achats:[]}; }
 function normState(st){ const e = emptyState(); for (const k of Object.keys(e)) if (Array.isArray(st && st[k])) e[k] = st[k]; return e; }
 function applyOps(st, ops){
   for (const o of ops){
@@ -472,8 +473,12 @@ function updateBanner(){
 /* ---------- utilisateur (convenance locale) ---------- */
 let USER = null;
 try{ USER = localStorage.getItem('kl_user'); }catch(e){}
+/* v12 : techniciens nommes (Technicien 1 = Ba, Technicien 2 = Djibril) */
+const TECHS = ['Ba','Djibril'];
+function isTech(u){ return !!u && (TECHS.indexOf(u)>=0 || u.indexOf('Technicien')===0); }
+if (USER==='Technicien 1' || USER==='Technicien 2'){ USER = (USER==='Technicien 1') ? 'Ba' : 'Djibril'; try{ localStorage.setItem('kl_user', USER); }catch(e){} }
 function setUser(u){ USER = u; try{ localStorage.setItem('kl_user', u); }catch(e){} document.getElementById('userchip').textContent = u;
-  TAB = (u==='Samba') ? 'samba' : (u==='Madame' ? 'vente' : (u.indexOf('Technicien')===0 ? 'journal' : 'tb'));
+  TAB = (u==='Samba') ? 'samba' : (u==='Madame' ? 'vente' : (isTech(u) ? 'journal' : 'tb'));
   render(); }
 
 /* ---------- agregats ---------- */
@@ -500,18 +505,38 @@ const INTRANTS_TAG = {
 };
 function todosFor(d){
   const hm = halfMonth(d); const out = [];
-  out.push({cls:'g', b:'Arrosage du matin', why:'toutes zones, goutte-à-goutte — puis pépinière et hors-sol en fin d’après-midi'});
-  out.push({cls:'g', b:'Tour de scouting', why:'10 feuilles retournées par planche, noter toute attaque dans le Journal'});
-  if (d.getDay()===1) out.push({cls:'w', b:'LUNDI : traitement préventif du soir', why:'savon noir + neem sur choux, tomate, gombo, concombre (tabac ou Alpha si attaque déclarée)', int:'savon noir · neem · tabac · Alpha · pulvérisateur rincé et chargé'});
-  if (d.getDay()===6) out.push({cls:'w', b:'SAMEDI : jour beauté', why:'bordures nettes, allées propres, pelouse, ressemis des trous'});
+  /* v12 : taches precises, partagees en deux parts (A / B) entre Ba et Djibril, inversees chaque jour */
+  out.push({cls:'g', b:'Arrosage du matin — planches maraîchères', why:'goutte-à-goutte : toutes les lignes ouvertes, goutteurs bouchés débouchés, fuites notées', part:'A'});
+  out.push({cls:'g', b:'Arrosage — pépinière, hors-sol et jeunes arbres', why:'pépinière + hors-sol matin ET fin d’après-midi ; cuvettes agrumes, moringa, papayers', part:'B'});
+  out.push({cls:'g', b:'Scouting — tomate, gombo, concombre, aubergine', why:'10 feuilles retournées par planche, noter toute attaque dans le Journal', part:'A'});
+  out.push({cls:'g', b:'Scouting — choux, laitues, oignons, aromatiques, pépinière', why:'10 feuilles retournées par planche, noter toute attaque dans le Journal', part:'B'});
+  if (d.getDay()===1){
+    out.push({cls:'w', b:'LUNDI : traitement du soir — tomate et gombo', why:'savon noir + neem (tabac ou Alpha si attaque déclarée)', int:'savon noir · neem · tabac · Alpha · pulvérisateurs rincés et chargés', part:'A'});
+    out.push({cls:'w', b:'LUNDI : traitement du soir — choux et concombre', why:'savon noir + neem (tabac ou Alpha si attaque déclarée)', part:'B'});
+  }
+  if (d.getDay()===6){
+    out.push({cls:'w', b:'SAMEDI beauté : bordures nettes et allées propres', why:'bordures des planches, allées balayées, déchets au compost', part:'A'});
+    out.push({cls:'w', b:'SAMEDI beauté : pelouse et ressemis des trous', why:'pelouse tondue/arrosée, trous des planches ressemés', part:'B'});
+  }
   if (d.getDay()===0) out.push({cls:'t', b:'DIMANCHE : rapport de la semaine', why:'onglet Rapport → copier et envoyer sur WhatsApp'});
   for (const row of CAL){
     for (const [t,a,b] of row.a){
       if (t!=='E' && a<=hm && hm<b) out.push({cls: t==='R'?'t':'g', b: TAGLBL[t]+' : '+row.c, why:'fenêtre du calendrier cultural', int:INTRANTS_TAG[t]||'', cal:true});
     }
   }
+  return repartir(out, d);
+}
+/* v12 : repartition equitable — les parts A/B s'inversent chaque jour, les autres taches alternent */
+function jourNum(d){ return Math.round(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate())/86400000); }
+function repartir(out, d){
+  const p = jourNum(d) % 2; let k = p;
+  for (const t of out){
+    if (t.part) t.qui = TECHS[(t.part==='A' ? 0 : 1) ^ p];
+    else { t.qui = TECHS[k % 2]; k++; }
+  }
   return out;
 }
+function quiTxt(t){ return t && t.qui ? ' · 👤 '+t.qui : ''; }
 function intrantsAVenir(){
   // intrants des operations des 2 prochains jours (a preparer des la veille)
   const seen = {}; const out = [];
@@ -578,9 +603,10 @@ function vTableau(){
     <div class="card"><h3>Signalements à régler</h3><div class="kpi">${aRegler().length}</div>
       <div class="kpi-sub">${aRegler().length? '<span class="pill '+(att.some(a=>a.gravite>=3)?'crit':'warn')+'">à régler</span> dont '+att.length+' attaque'+(att.length>1?'s':'') : '<span class="pill ok">rien à signaler</span>'}</div></div>
     <div class="card"><h3>Tâches du jour</h3><div class="kpi">${(()=>{ const l = todosFor(new Date()).filter(t=>!t.cal); return l.filter(t=>tacheFaite(today(), t.b)).length + ' <small>/ ' + l.length + '</small>'; })()}</div>
-      <div class="kpi-sub">cochées par les techniciens · ${S.ops.filter(o=>o.type!=='Tâche' && (new Date()-new Date(o.d+'T12:00'))<7*86400000).length} opérations (7 j)</div></div>
+      <div class="kpi-sub">${(()=>{ const l = todosFor(new Date()).filter(t=>!t.cal); return TECHS.map(n=>{ const m = l.filter(t=>t.qui===n); return esc(n)+' '+m.filter(t=>tacheFaite(today(), t.b)).length+'/'+m.length; }).join(' · '); })()} · ${S.ops.filter(o=>o.type!=='Tâche' && (new Date()-new Date(o.d+'T12:00'))<7*86400000).length} opérations (7 j)</div></div>
   </div>
   <div class="sect card"><h3>⚠️ Signalements à régler</h3>${listeARegler()}</div>
+  ${(()=>{ const o = achatsOuverts(); return o.length ? '<div class="sect card"><h3>🛒 Achats demandés ('+o.length+') — détail dans Matériel</h3><ul class="todo">'+o.slice(0,6).map(a=>{ const u = ACH_URG.find(x=>x[0]===a.urg)||ACH_URG[2]; return '<li><span class="dot '+(u[3]==='crit'?'t':(u[3]==='warn'?'w':'g'))+'"></span><div><b>'+esc(a.des)+'</b> — '+esc(a.qte||'')+' <span class="pill '+u[3]+'">'+u[1]+' '+esc(a.urg)+'</span><div class="why">'+esc(a.cat||'')+' · '+fmtD(a.d)+' · '+esc(a.par||'')+'</div></div></li>'; }).join('')+'</ul></div>' : ''; })()}
   <div class="sect card">
     <h3>Kg récoltés — 8 dernières semaines (barre creuse = objectif)</h3>
     <div class="chart">${bars.map(v=>'<div class="bar" style="height:'+Math.max(2,Math.round(v/mx*90))+'px"><span>'+(v?Math.round(v):'')+'</span></div>').join('')}
@@ -593,11 +619,11 @@ function vTableau(){
     <p class="muted" style="font-size:.84rem;margin:2px 0 0">L'icône Keur Lemou Bio apparaît alors comme une vraie appli.</p></div>
   <div class="sect card">
     <h3>À faire aujourd'hui — ${new Date().toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'})}</h3>
-    <ul class="todo">${todos.map(t=>{ const f = tacheFaite(today(), t.b); return '<li><span class="dot '+t.cls+'"></span><div><b>'+esc(t.b)+'</b>'+(f?' <span class="pill ok">✓ fait · '+esc(f.par||'')+'</span>':'')+'<div class="why">'+esc(t.why)+'</div></div></li>'; }).join('')}</ul>
+    <ul class="todo">${todos.map(t=>{ const f = tacheFaite(today(), t.b); return '<li><span class="dot '+t.cls+'"></span><div><b>'+esc(t.b)+'</b>'+(f?' <span class="pill ok">✓ fait · '+esc(f.par||'')+'</span>':'')+'<div class="why">'+esc(t.why)+esc(quiTxt(t))+'</div></div></li>'; }).join('')}</ul>
   </div>
   <div class="sect card">
     <h3>🌙 Demain — ${demain.toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'})} (à lire la veille au soir)</h3>
-    <ul class="todo">${todosDemain.map(t=>'<li><span class="dot '+t.cls+'"></span><div><b>'+esc(t.b)+'</b><div class="why">'+esc(t.why)+'</div></div></li>').join('')}</ul>
+    <ul class="todo">${todosDemain.map(t=>'<li><span class="dot '+t.cls+'"></span><div><b>'+esc(t.b)+'</b><div class="why">'+esc(t.why)+esc(quiTxt(t))+'</div></div></li>').join('')}</ul>
   </div>
   <div class="sect card">
     <h3>🧺 Intrants à préparer (opérations des 2 prochains jours)</h3>
@@ -652,11 +678,15 @@ function vJournal(){
   }).join('');
   /* v7 : taches du jour a cocher */
   TACHES_CUR = todosFor(new Date());
-  const ROUT = TACHES_CUR.filter(t=>!t.cal), nCal = TACHES_CUR.filter(t=>t.cal && tacheFaite(today(), t.b)).length;
+  const TECH = isTech(USER);
+  if (TECH) TACHES_CUR.sort((a,b)=>(a.qui===USER?0:1)-(b.qui===USER?0:1));   // mes taches d'abord
+  const ROUT = TACHES_CUR.filter(t=>!t.cal && (!TECH || t.qui===USER)), nCal = TACHES_CUR.filter(t=>t.cal && tacheFaite(today(), t.b)).length;
   const nFait = ROUT.filter(t=>tacheFaite(today(), t.b)).length;
-  const li = (t,i)=>{ const f = tacheFaite(today(), t.b);
-    return '<li class="'+(f?'done':'')+'"><button type="button" class="ck'+(f?' on':'')+'" data-tk="'+i+'" aria-pressed="'+(f?'true':'false')+'" aria-label="'+esc(t.b)+'">'+(f?'✓':'')+'</button>'+
-      '<div><b>'+esc(t.b)+'</b><div class="why">'+(f? 'fait par '+esc(f.par||'?') : esc(t.why))+'</div></div></li>'; };
+  const li = (t,i)=>{ const f = tacheFaite(today(), t.b); const autre = TECH && t.qui!==USER;
+    return '<li class="'+(f?'done':'')+'"'+(autre?' style="opacity:.55"':'')+'>'+(autre
+      ? '<span class="ck'+(f?' on':'')+'" style="display:flex;align-items:center;justify-content:center;cursor:default" aria-hidden="true">'+(f?'✓':'')+'</span>'
+      : '<button type="button" class="ck'+(f?' on':'')+'" data-tk="'+i+'" aria-pressed="'+(f?'true':'false')+'" aria-label="'+esc(t.b)+'">'+(f?'✓':'')+'</button>')+
+      '<div><b>'+esc(t.b)+'</b> <span class="pill '+(t.qui===USER?'ok':'')+'" style="'+(t.qui===USER?'':'border:1px solid var(--line)')+'">👤 '+esc(t.qui||'')+'</span><div class="why">'+(f? 'fait par '+esc(f.par||'?') : esc(t.why))+'</div></div></li>'; };
   const chk = TACHES_CUR.map((t,i)=>t.cal?'':li(t,i)).join('');
   const chkCal = TACHES_CUR.map((t,i)=>t.cal?li(t,i):'').join('');
   /* v8 : tache non prevue — espece obligatoire */
@@ -686,7 +716,7 @@ function vJournal(){
   }
   return `
   <div class="sect card"><h2 style="font-size:1.05rem;margin-bottom:4px">✅ Tâches du jour — ${new Date().toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'})}</h2>
-    <p class="muted" style="font-size:.86rem;margin:0">Coche dès que c’est fait : <b>${nFait} / ${ROUT.length}</b></p>
+    <p class="muted" style="font-size:.86rem;margin:0">${TECH ? 'Tes tâches — coche dès que c’est fait <b>en entier</b> : ' : 'Coche dès que c’est fait : '}<b>${nFait} / ${ROUT.length}</b>${TECH ? ' · les tâches de '+esc(TECHS.find(x=>x!==USER)||'')+' sont en gris : c’est lui qui les coche' : ' · répartition Ba / Djibril inversée chaque jour'}</p>
     <div class="prog"><i style="width:${ROUT.length? Math.round(nFait/ROUT.length*100):0}%"></i></div>
     <ul class="chk">${chk}</ul>
     ${chkCal ? '<details style="margin-top:8px"'+(nCal?' open':'')+'><summary style="cursor:pointer;font-weight:700;padding:6px 0">🌱 Travaux de la quinzaine — coche ceux faits aujourd’hui'+(nCal?' ('+nCal+')':'')+'</summary><ul class="chk">'+chkCal+'</ul></details>' : ''}</div>
@@ -802,6 +832,7 @@ function buildReport(){
   const tk = ops.filter(o=>o.type==='Tâche');
   const joursTk = {}; for (const o of tk) joursTk[o.d] = (joursTk[o.d]||0)+1;
   L.push('TACHES DU JOUR COCHEES : ' + tk.length + (tk.length ? ' (' + Object.entries(joursTk).map(([d,n])=>fmtD(d)+' : '+n).join(' · ') + ')' : ''));
+  if (tk.length) L.push('  - ' + TECHS.map(n=>n+' : '+tk.filter(o=>o.par===n).length).join(' · '));
   const tr = ops.filter(o=>o.type==='Traitement');
   L.push('TRAITEMENTS (' + tr.length + ') :' + (tr.length ? '' : ' aucun'));
   for (const o of tr) L.push('  - ' + fmtD(o.d) + ' ' + (o.produit||'') + ' sur ' + o.culture + (o.detail && o.detail!==o.produit ? ' — ' + o.detail.replace((o.produit||'')+' — ','') : ''));
@@ -825,6 +856,11 @@ function buildReport(){
     const rep = invA.filter(it=>it.etat==='à réparer');
     L.push('MATERIEL : ' + pt.length + '/' + invA.length + ' pointés ce mois-ci' + (rep.length? ' — à réparer : ' + rep.map(it=>it.nom).join(', ') : ''));
   }
+  const achO = achatsOuverts();
+  const achW = (S.achats||[]).filter(a=>a.statut==='acheté' && a.achete && inWeek(a.achete.d));
+  L.push('ACHATS A FAIRE (' + achO.length + ')' + (achO.length ? ' :' : ' : rien'));
+  for (const a of achO) L.push('  - [' + (a.urg||'') + '] ' + (a.des||'') + ' — ' + (a.qte||'') + ' (' + (a.cat||'') + (a.spec?', '+a.spec:'') + (a.qual?', qualité '+a.qual:'') + ') — ' + (a.par||''));
+  if (achW.length) L.push('ACHETES CETTE SEMAINE (' + achW.length + ') : ' + achW.map(a=>a.des).join(', '));
   L.push('');
   L.push('Rapport généré par Keur Lemou Exploitation' + (USER? ' — saisi par ' + USER : ''));
   return L.join('\n');
@@ -841,6 +877,7 @@ function csv(){
     const dernier = (it.checks||[]).slice(-1)[0];
     L.push(['materiel',it.ajoute||'',it.nom,'','','',(it.cat||'')+' '+(it.specs||'')+' — etat '+(it.etat||'')+(dernier?' — pointe '+dernier.d:''),it.par||''].map(q).join(';'));
   }
+  for (const a of (S.achats||[])) L.push(['achat',a.d,a.des,a.qte||'','','',(a.cat||'')+' — '+(a.spec||'')+' — qualite '+(a.qual||'')+' — urgence '+(a.urg||'')+' — '+(a.statut||''),a.par||''].map(q).join(';'));
   return L.join('\n');
 }
 function vRapport(){
@@ -944,6 +981,45 @@ function vScan(){
    '<div class="sect card"><h3>Derniers scans ('+S.scans.length+'/60)</h3>'+
    (items?'<div class="scangrid">'+items+'</div>':'<div class="empty">aucun scan — appuie sur le bouton ci-dessus</div>')+'</div>';
 }
+/* ---------- v12 : achats — expression des besoins ---------- */
+const ACH_CATS = ['Intrants','Outillage','Engrais','Matériel de clôture','Outillage de jardinage','Semences','Pépinière','Autres'];
+const ACH_URG = [['Urgent','🔴','sous 48 h','crit'],['Cette semaine','🟠','avant dimanche','warn'],['Peut attendre','🟢','prochain passage','ok']];
+let ACH_IMG = null;
+function urgRang(u){ const i = ACH_URG.findIndex(x=>x[0]===u); return i<0 ? 9 : i; }
+function achatsOuverts(){ return (S.achats||[]).filter(a=>a.statut!=='acheté').sort((a,b)=>urgRang(a.urg)-urgRang(b.urg) || (a.d<b.d?-1:1)); }
+function peutAcheter(){ return USER==='Mansour' || USER==='Madame'; }
+function ligneAchat(a){
+  const i = S.achats.indexOf(a); const u = ACH_URG.find(x=>x[0]===a.urg) || ACH_URG[2];
+  return '<div class="invc">'+(a.img?'<img class="ph" src="'+a.img+'" alt="photo" loading="lazy">':'<div class="ph noph">🛒</div>')+
+    '<div class="invb"><b>'+esc(a.des)+'</b> <span class="pill '+(a.statut==='acheté'?'ok':u[3])+'">'+(a.statut==='acheté'?'✓ acheté':u[1]+' '+esc(a.urg))+'</span>'+
+    '<div class="why">'+esc(a.cat||'')+' · quantité : <b>'+esc(a.qte||'')+'</b>'+(a.spec?' · '+esc(a.spec):'')+(a.qual?' · qualité : '+esc(a.qual):'')+'</div>'+
+    '<div class="why">demandé le '+fmtD(a.d)+' par '+esc(a.par||'')+(a.achete?' · acheté le '+fmtD(a.achete.d)+' ('+esc(a.achete.par||'')+')':'')+'</div>'+
+    '<div class="btnrow">'+(a.statut!=='acheté' && peutAcheter() ? '<button class="btn small" data-achok="'+i+'">✔ Acheté</button>' : '')+btnDel('achats:'+i, a)+'</div>'+
+    '</div></div>';
+}
+function vAchats(){
+  const ouv = achatsOuverts();
+  const faits = (S.achats||[]).filter(a=>a.statut==='acheté').slice(-10).reverse();
+  return `
+  <div class="sect card"><h2 style="font-size:1.05rem;margin-bottom:8px">🛒 Achats — expression des besoins</h2>
+    <form id="f-ach">
+      <div class="grid2">
+        <div class="f"><label>Rubrique</label><select name="cat" required><option value="">— choisir —</option>${opts(ACH_CATS)}</select></div>
+        <div class="f"><label>Désignation</label><input name="des" required placeholder="ex : tuyau goutte-à-goutte, semences de carotte…"></div>
+      </div>
+      <div class="f"><label>Spécification (taille, marque, variété, dosage…)</label><input name="spec" placeholder="ex : 16 mm, rouleau de 100 m"></div>
+      <div class="grid2">
+        <div class="f"><label>Qualité</label><input name="qual" placeholder="ex : bio, 1er choix, galvanisé…"></div>
+        <div class="f"><label>Quantité</label><input name="qte" required placeholder="ex : 2 rouleaux, 5 kg, 10 sachets"></div>
+      </div>
+      <div class="f"><label>Niveau d’urgence</label><div class="qcrow">${ACH_URG.map((u,i)=>'<label class="chip rad"><input type="radio" name="urg" value="'+u[0]+'"'+(i===1?' checked':'')+'>'+u[1]+' '+u[0]+'<small>'+u[2]+'</small></label>').join('')}</div></div>
+      <div class="btnrow"><button type="button" class="btn ghost" id="btn-achph">📷 Photo (facultatif)</button><img id="achprev" style="display:none;height:56px;border-radius:8px" alt="aperçu"></div>
+      <button class="btn terre">Envoyer la demande d’achat</button>
+    </form></div>
+  <div class="sect card"><h3>Besoins en cours (${ouv.length})</h3>
+    ${ouv.length ? '<div class="invgrid">'+ouv.map(ligneAchat).join('')+'</div>' : '<div class="empty">aucun besoin en attente</div>'}
+    ${faits.length ? '<details style="margin-top:8px"><summary style="cursor:pointer;font-weight:700;padding:6px 0">Achetés récemment ('+faits.length+')</summary><div class="invgrid">'+faits.map(ligneAchat).join('')+'</div></details>' : ''}</div>`;
+}
 /* ---------- inventaire du materiel ---------- */
 let INV_IMG = null, INV_PLAQUE = null;
 function moisCourant(){ return today().slice(0,7); }
@@ -965,7 +1041,7 @@ function vInv(){
       (it.etat==='réformé'?'':(chk?'<span class="pill ok">✓ pointé ce mois</span>':'<button class="btn small" data-pt="'+i+'">Pointer ce mois ✓</button>'))+
       '</div></div>';
   }).join('');
-  return `
+  return vAchats() + `
   <div class="sect card"><h2 style="font-size:1.05rem;margin-bottom:4px">Inventaire de ${moisLbl}</h2>
     <p class="muted" style="font-size:.9rem;margin-top:0"><b>${pointes} / ${actifs.length}</b> équipements pointés ce mois-ci${actifs.length && pointes>=actifs.length?' — <span class="pill ok">inventaire complet ✓</span>':''}. Une fois par mois, passe devant chaque équipement et touche « Pointer ».</p></div>
   <div class="sect card"><h2 style="font-size:1.05rem;margin-bottom:8px">Ajouter un équipement</h2>
@@ -1037,11 +1113,12 @@ function wire(){
   /* v7 : cocher / decocher une tache du jour */
   document.querySelectorAll('[data-tk]').forEach(b=>b.addEventListener('click', ()=>{
     const t = TACHES_CUR[+b.dataset.tk]; if (!t) return;
+    if (isTech(USER) && t.qui && t.qui!==USER){ toast('Tâche de '+t.qui+' — c’est lui qui la coche'); return; }
     const ds = today(); const ex = tacheFaite(ds, t.b);
     if (ex){
       S.ops.splice(S.ops.indexOf(ex), 1);
       render(); delRow('ops', ex); toast('Tâche décochée');
-    } else record('ops', {d:ds, type:'Tâche', culture:'Routine', detail:t.b, par:USER}, '✓ '+t.b);
+    } else record('ops', {d:ds, type:'Tâche', culture:'Routine', detail:t.b, qui:t.qui||'', par:USER}, '✓ '+t.b);
   }));
   /* v7 : taches non prevues */
   document.querySelectorAll('[data-x]').forEach(b=>b.addEventListener('click', ()=>{
@@ -1099,6 +1176,23 @@ function wire(){
   document.querySelectorAll('[data-verif]').forEach(b=>b.addEventListener('click', ()=>{
     const o = S.ops[+b.dataset.verif];
     if (o){ o.verifie = {d:today(), par:USER}; render(); putRow('ops', o); toast('Signalement vérifié'); }
+  }));
+  const fach = document.getElementById('f-ach');
+  if (fach){
+    document.getElementById('btn-achph').addEventListener('click', ()=>openCapture(img=>{
+      ACH_IMG = img; const p = document.getElementById('achprev'); if (p){ p.src = img; p.style.display = 'inline-block'; } toast('Photo ajoutée');
+    }, 480, 0.6));
+    fach.addEventListener('submit', e=>{
+      e.preventDefault(); const f = new FormData(fach);
+      record('achats', {d:today(), cat:f.get('cat'), des:f.get('des'), spec:f.get('spec'), qual:f.get('qual'), qte:f.get('qte'),
+        urg:f.get('urg')||'Cette semaine', img:ACH_IMG, statut:'à acheter', par:USER}, 'Demande d’achat envoyée');
+      ACH_IMG = null;
+    });
+  }
+  document.querySelectorAll('[data-achok]').forEach(b=>b.addEventListener('click', ()=>{
+    const a = S.achats[+b.dataset.achok]; if (!a) return;
+    a.statut = 'acheté'; a.achete = {d:today(), par:USER};
+    render(); putRow('achats', a); toast(a.des+' : acheté ✓');
   }));
   const finv = document.getElementById('f-inv');
   if (finv){
@@ -1194,7 +1288,7 @@ document.getElementById('whodlg').addEventListener('close', function(){
 /* ---------- demarrage ---------- */
 if (READONLY){ applyRole(); TAB = 'tb'; }
 else if (USER){ document.getElementById('userchip').textContent = USER;
-  TAB = (USER==='Madame') ? 'vente' : (USER.indexOf('Technicien')===0 ? 'journal' : 'tb'); }
+  TAB = (USER==='Madame') ? 'vente' : (isTech(USER) ? 'journal' : 'tb'); }
 else { document.getElementById('userchip').textContent = 'moi ?'; setTimeout(()=>{ try{ if (!READONLY) document.getElementById('whodlg').showModal(); }catch(e){} }, 1500); }
 /* cache local : l'appli s'ouvre instantanement, meme sans reseau */
 try{ const c = JSON.parse(localStorage.getItem(CACHE_KEY)||'null'); if (c) S = applyOps(normState(c), outLoad()); }catch(e){}
