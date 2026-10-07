@@ -6,7 +6,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <title>KLM App — Keur Lemou</title>
-<!-- build v12 : taches du jour precises et reparties Ba / Djibril (inversees chaque jour) + achats (expression des besoins) dans Materiel ; v11 : utilisateur Observateur (code lecture seule) ; v10 2026-10 : version autonome (Google Sheets + Apps Script), sans Claude ; base v9 2026-10-03 : annuler une saisie + bouton Sortir ; v8 (donnees remises a zero) : taches non prevues par espece (obligatoire) + fertilisation/desherbage/semis/pepiniere/triage/conditionnement/conservation + tout signalement a regler (bouton regler) -->
+<!-- build v13 : mise a jour automatique de l'appli sur les telephones ; v12 : taches du jour precises et reparties Ba / Djibril (inversees chaque jour) + achats (expression des besoins) dans Materiel ; v11 : utilisateur Observateur (code lecture seule) ; v10 2026-10 : version autonome (Google Sheets + Apps Script), sans Claude ; base v9 2026-10-03 : annuler une saisie + bouton Sortir ; v8 (donnees remises a zero) : taches non prevues par espece (obligatoire) + fertilisation/desherbage/semis/pepiniere/triage/conditionnement/conservation + tout signalement a regler (bouton regler) -->
 <link rel="icon" type="image/png" href="icon-192.png">
 <meta name="theme-color" content="#1e4d2b">
 <meta name="apple-mobile-web-app-title" content="KLM App">
@@ -1300,7 +1300,21 @@ document.getElementById('pinform').addEventListener('submit', ()=>{
 render(); updateBanner();
 if (!PIN && /^https:\/\/script\.google/.test(API_URL)) askPin(false); else flush();
 setInterval(pull, 60000);
+/* v13 : mise a jour automatique — si une nouvelle version est en ligne, la page se recharge d'elle-meme (les saisies en attente restent dans le telephone) */
+const BUILD = 'v13';
+async function checkUpdate(){
+  try{
+    if (busy()) return;
+    const t = await fetch(location.pathname + '?nc=' + Date.now(), {cache:'no-store'}).then(r=>r.text());
+    const m = t.match(/<!-{2} build (v\d+)/); if (!m || m[1]===BUILD) return;
+    const k = 'kl_upd_' + m[1]; if (sessionStorage.getItem(k)) return; sessionStorage.setItem(k, '1');
+    toast('Nouvelle version de l’appli — mise à jour…');
+    setTimeout(()=>location.replace(location.pathname + '?v=' + m[1]), 1200);
+  }catch(e){}
+}
+setTimeout(checkUpdate, 4000);
+setInterval(checkUpdate, 15*60000);
 window.addEventListener('online', flush);
-document.addEventListener('visibilitychange', ()=>{ if (document.visibilityState==='visible') pull(); });
+document.addEventListener('visibilitychange', ()=>{ if (document.visibilityState==='visible'){ pull(); checkUpdate(); } });
 </script>
 </body></html>
