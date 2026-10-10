@@ -6,7 +6,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <title>KLM App — Keur Lemou</title>
-<!-- build v13 : mise a jour automatique de l'appli sur les telephones ; v12 : taches du jour precises et reparties Ba / Djibril (inversees chaque jour) + achats (expression des besoins) dans Materiel ; v11 : utilisateur Observateur (code lecture seule) ; v10 2026-10 : version autonome (Google Sheets + Apps Script), sans Claude ; base v9 2026-10-03 : annuler une saisie + bouton Sortir ; v8 (donnees remises a zero) : taches non prevues par espece (obligatoire) + fertilisation/desherbage/semis/pepiniere/triage/conditionnement/conservation + tout signalement a regler (bouton regler) -->
+<!-- build v14 : missions nominatives (visite du 10/10 : citronniers partages Ba / Djibril, cocotiers, basilic, filet) + soufre mouillable ; v13 : mise a jour automatique de l'appli sur les telephones ; v12 : taches du jour precises et reparties Ba / Djibril (inversees chaque jour) + achats (expression des besoins) dans Materiel ; v11 : utilisateur Observateur (code lecture seule) ; v10 2026-10 : version autonome (Google Sheets + Apps Script), sans Claude ; base v9 2026-10-03 : annuler une saisie + bouton Sortir ; v8 (donnees remises a zero) : taches non prevues par espece (obligatoire) + fertilisation/desherbage/semis/pepiniere/triage/conditionnement/conservation + tout signalement a regler (bouton regler) -->
 <link rel="icon" type="image/png" href="icon-192.png">
 <meta name="theme-color" content="#1e4d2b">
 <meta name="apple-mobile-web-app-title" content="KLM App">
@@ -299,7 +299,8 @@ const RAVAGEURS = {
 const TRAITEMENTS = {
  'Tabac':'macération de tabac — pulvériser le soir, gants obligatoires',
  'Savon noir + neem':'savon noir + huile de neem — traitement préventif du lundi',
- 'Alpha':'traitement Alpha — dose indiquée sur l’emballage'
+ 'Alpha':'traitement Alpha — dose indiquée sur l’emballage',
+ 'Soufre mouillable':'soufre mouillable — acariens et gale des agrumes, le soir, jamais le même jour que le neem'
 };
 /* v7 : taches non prevues (hors liste du jour) */
 const EXTRAS = [['Traitement','🧴'],['Récolte','🧺'],['Semis','🌱'],['Pépinière','🪴'],['Fertilisation','🟤'],['Désherbage','🌾'],
@@ -503,11 +504,44 @@ const INTRANTS_TAG = {
   P:'plants durcis · compost mûr · paillage · arrosage de reprise',
   R:'cagettes propres · balance · point d’ombre pour la récolte'
 };
+/* v14 : MISSIONS nominatives — taches ponctuelles assignees a une personne, affichees a partir de « du »
+   et tant qu'elles ne sont pas cochees (une mission cochee un jour disparait les jours suivants) */
+const CITRON = [
+  ['2026-10-11','partage : compter les citronniers avec l’autre technicien et marquer TA moitié d’un ruban (Ba = bleu, Djibril = rouge)','envoyer le nombre total de citronniers à Mansour'],
+  ['2026-10-11','cueillir TOUS les petits citrons à croûte blanche et les sortir de la ferme','sac fermé — pas au compost ; ils ne grossiront pas'],
+  ['2026-10-11','test de l’ongle sur 1 fruit atteint + photo très rapprochée et photo du dessous des jeunes feuilles','s’enlève = cochenilles ; fixe et rugueux = acariens / thrips / gale → écrire le résultat à Mansour'],
+  ['2026-10-12','couper tout le bois mort jusqu’au vert + supprimer les rejets qui sortent du pied','sécateur désinfecté (eau de javel) entre chaque arbre ; branches coupées sorties de la zone'],
+  ['2026-10-12','contrôler le collet de chaque arbre : gomme, écorce décollée, termites, trous de rongeur','toute anomalie → Signalement dans l’appli'],
+  ['2026-10-12','désherber les cuvettes (arracher l’herbe à épis) puis remettre compost et paillage','paillage à 10 cm du tronc'],
+  ['2026-10-13','remplacer les attaches sur fer à béton par des attaches souples, fer écarté du tronc','le fer ne doit jamais frotter l’écorce'],
+  ['2026-10-13','MARDI SOIR : traitement au soufre mouillable (arbres + fruits)','pas le même jour que le neem ; enregistrer aussi en Traitement → Soufre mouillable', 'soufre mouillable (à acheter avant mardi) · pulvérisateur rincé · gants'],
+  ['2026-10-20','MARDI SOIR : traitement neem + savon noir (thrips, pucerons, mineuse)','7 jours après le soufre ; enregistrer aussi en Traitement', 'savon noir · huile de neem · pulvérisateur rincé'],
+  ['2026-10-27','contrôle : nouveaux fruits croûteux ? jeunes feuilles déformées ?','photo à Mansour ; si rien de nouveau, écrire « citronniers OK »']
+];
+const MISSIONS = [];
+for (const n of ['Ba','Djibril']) for (const [du,b,why,int] of CITRON) MISSIONS.push({du, qui:n, b:'Citronniers moitié '+n+' — '+b, why, int:int||''});
+MISSIONS.push(
+  {du:'2026-10-11', qui:'Ba', b:'Citronnier qui dépérit (photos du 10/10) — taille sévère du bois mort, enlever le fruit qui pend, observer le trou au pied', why:'arbre à suivre de près : photo avant/après à Mansour'},
+  {du:'2026-10-12', qui:'Ba', b:'Jeunes cocotiers — écarter le fumier en mottes du pied, pailler la cuvette, vérifier que l’eau arrive bien', why:'ne couper que les palmes entièrement sèches'},
+  {du:'2026-10-12', qui:'Ba', b:'Plant sans feuilles sous trépied — gratter l’écorce : vert = vivant, brun sec = mort', why:'si mort : Signalement « à remplacer »'},
+  {du:'2026-10-11', qui:'Djibril', b:'Basilic — récolter et pincer toutes les fleurs ; repiquer les semis spontanés en pépinière', why:'un basilic en fleurs s’épuise et monte en graine'},
+  {du:'2026-10-11', qui:'Djibril', b:'Filet de la culture protégée — refermer le côté ouvert et enterrer le bas du filet', why:'aucune entrée possible pour les insectes'},
+  {du:'2026-10-11', qui:'Djibril', b:'Agrume aux jeunes feuilles enroulées — regarder sous les feuilles (pucerons, galeries de mineuse) + photo', why:'si pucerons : savon noir + neem le soir même'},
+  {du:'2026-10-14', qui:'Djibril', b:'Jeunes arbres sous trépied (agrumes, manguier…) — désherber et reformer les cuvettes', why:'cuvette ronde et propre comme celle du manguier'}
+);
+function isoD(d){ return new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate())).toISOString().slice(0,10); }
+function missionFaiteAvant(m, ds){ return S.ops.find(o=>o.type==='Tâche' && o.detail===m.b && o.d<ds); }
+function missionsFor(d){
+  const ds = isoD(d);
+  return MISSIONS.filter(m=>m.du<=ds && !missionFaiteAvant(m, ds)).map(m=>({cls:'w', b:m.b, mis:true, qui:m.qui, int:m.int||'',
+    why:'📌 mission'+(m.du<ds?' — à faire depuis le '+fmtD(m.du):'')+' · '+m.why}));
+}
+function missionsEnRetard(){ const t = today(); return MISSIONS.filter(m=>m.du<t && !S.ops.find(o=>o.type==='Tâche' && o.detail===m.b)); }
 function todosFor(d){
   const hm = halfMonth(d); const out = [];
   /* v12 : taches precises, partagees en deux parts (A / B) entre Ba et Djibril, inversees chaque jour */
   out.push({cls:'g', b:'Arrosage du matin — planches maraîchères', why:'goutte-à-goutte : toutes les lignes ouvertes, goutteurs bouchés débouchés, fuites notées', part:'A'});
-  out.push({cls:'g', b:'Arrosage — pépinière, hors-sol et jeunes arbres', why:'pépinière + hors-sol matin ET fin d’après-midi ; cuvettes agrumes, moringa, papayers', part:'B'});
+  out.push({cls:'g', b:'Arrosage — pépinière, hors-sol et jeunes arbres', why:'pépinière + hors-sol matin ET fin d’après-midi ; cuvettes agrumes, moringa, papayers, cocotiers', part:'B'});
   out.push({cls:'g', b:'Scouting — tomate, gombo, concombre, aubergine', why:'10 feuilles retournées par planche, noter toute attaque dans le Journal', part:'A'});
   out.push({cls:'g', b:'Scouting — choux, laitues, oignons, aromatiques, pépinière', why:'10 feuilles retournées par planche, noter toute attaque dans le Journal', part:'B'});
   if (d.getDay()===1){
@@ -524,6 +558,7 @@ function todosFor(d){
       if (t!=='E' && a<=hm && hm<b) out.push({cls: t==='R'?'t':'g', b: TAGLBL[t]+' : '+row.c, why:'fenêtre du calendrier cultural', int:INTRANTS_TAG[t]||'', cal:true});
     }
   }
+  for (const m of missionsFor(d)) out.push(m);
   return repartir(out, d);
 }
 /* v12 : repartition equitable — les parts A/B s'inversent chaque jour, les autres taches alternent */
@@ -531,6 +566,7 @@ function jourNum(d){ return Math.round(Date.UTC(d.getFullYear(), d.getMonth(), d
 function repartir(out, d){
   const p = jourNum(d) % 2; let k = p;
   for (const t of out){
+    if (t.mis) continue;
     if (t.part) t.qui = TECHS[(t.part==='A' ? 0 : 1) ^ p];
     else { t.qui = TECHS[k % 2]; k++; }
   }
@@ -833,6 +869,9 @@ function buildReport(){
   const joursTk = {}; for (const o of tk) joursTk[o.d] = (joursTk[o.d]||0)+1;
   L.push('TACHES DU JOUR COCHEES : ' + tk.length + (tk.length ? ' (' + Object.entries(joursTk).map(([d,n])=>fmtD(d)+' : '+n).join(' · ') + ')' : ''));
   if (tk.length) L.push('  - ' + TECHS.map(n=>n+' : '+tk.filter(o=>o.par===n).length).join(' · '));
+  const mr = missionsEnRetard();
+  L.push('MISSIONS NON FAITES : ' + (mr.length ? mr.length : 'aucune'));
+  for (const m of mr) L.push('  - ' + m.qui + ' : ' + m.b + ' (depuis le ' + fmtD(m.du) + ')');
   const tr = ops.filter(o=>o.type==='Traitement');
   L.push('TRAITEMENTS (' + tr.length + ') :' + (tr.length ? '' : ' aucun'));
   for (const o of tr) L.push('  - ' + fmtD(o.d) + ' ' + (o.produit||'') + ' sur ' + o.culture + (o.detail && o.detail!==o.produit ? ' — ' + o.detail.replace((o.produit||'')+' — ','') : ''));
