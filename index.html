@@ -537,6 +537,46 @@ function missionsFor(d){
     why:'📌 mission'+(m.du<ds?' — à faire depuis le '+fmtD(m.du):'')+' · '+m.why}));
 }
 function missionsEnRetard(){ const t = today(); return MISSIONS.filter(m=>m.du<t && !S.ops.find(o=>o.type==='Tâche' && o.detail===m.b)); }
+/* v13 : taches de Mansour pour sa visite (rapport semaine 2) — visibles seulement par Mansour, dans Tableau */
+const VISITE_MANSOUR = {du:'2026-10-16', au:'2026-10-25', titre:'Visite du 17/10 — rapport semaine 2', groupes:[
+ ['Sur le terrain', [
+  'Pépinière : compter alvéoles et pots de chaque lot (tomate, choux, laitues, brocoli, poireau, céleri, aubergine, poivron, basilic, menthe)',
+  'Poireau : vérifier s’il a vraiment été semé (coché le 10/10 par Ba, semences encore demandées le 13/10)',
+  'Tomate, choux, maïs-tournesol : un lot ou deux ? (cochés par Ba ET Djibril)',
+  'Planches : levée radis, maïs, concombre, roquette, bok choy + reprise des laitues plantées le 12/10',
+  'Citronniers : bois mort coupé, cuvettes propres et paillées, attaches souples, rubans bleu/rouge',
+  'Citron caviar : examiner les lésions (chancre possible) et décider',
+  'Filet de la culture protégée : fermé et enterré',
+  'Mesurer la surface des hors-sol pour la toile anti-insectes',
+  'Kola du lion : graine ferme, terre humide, à l’ombre']],
+ ['Avec l’équipe', [
+  'Féliciter Ba et Djibril : 7 jours sur 7',
+  'Djibril : traitement choux-concombre du lundi 12/10 oublié',
+  'Tous : saisir chaque traitement (soufre compris) dans « Traitement »',
+  'Tous : quantité pour chaque semis, culture + note pour chaque photo',
+  'Ba : compléter les 4 photos du 11/10 sans culture ni note',
+  'Madame : unités et prix de la papaye, saisir la récolte des citrons',
+  'Samba : reprendre la saisie simple (tour de garde, portail fermé)',
+  'Lancer l’inventaire du matériel',
+  'Régler les attaques et photos en attente']],
+ ['À apporter', [
+  '100 sachets hors-sol',
+  'Semences : haricot, épinard, poireau, haricot ailé, laitue + romaine',
+  'Bt contre les chenilles']]
+]};
+function visiteFaite(b){ return S.ops.find(o=>o.type==='Tâche' && o.culture==='Visite' && o.detail===b); }
+function carteVisite(){
+  const V = VISITE_MANSOUR, t = today();
+  if (USER!=='Mansour' || t<V.du || t>V.au) return '';
+  const all = V.groupes.flatMap(g=>g[1]); const n = all.filter(visiteFaite).length;
+  let k = 0;
+  return '<div class="sect card"><h3>📋 Mes tâches — '+esc(V.titre)+'</h3>'+
+    '<p class="muted" style="font-size:.86rem;margin:0">Coche au fur et à mesure : <b>'+n+' / '+all.length+'</b></p>'+
+    '<div class="prog"><i style="width:'+Math.round(n/all.length*100)+'%"></i></div>'+
+    V.groupes.map(([g,L])=>'<p style="font-weight:700;margin:10px 0 2px">'+esc(g)+'</p><ul class="chk">'+L.map(b=>{ const f = visiteFaite(b); const i = all.indexOf(b);
+      return '<li class="'+(f?'done':'')+'"><button type="button" class="ck'+(f?' on':'')+'" data-vk="'+i+'" aria-pressed="'+(f?'true':'false')+'" aria-label="'+esc(b)+'">'+(f?'✓':'')+'</button><div><b>'+esc(b)+'</b>'+(f?'<div class="why">fait le '+fmtD(f.d)+'</div>':'')+'</div></li>'; }).join('')+'</ul>').join('')+
+    '</div>';
+}
 function todosFor(d){
   const hm = halfMonth(d); const out = [];
   /* v12 : taches precises, partagees en deux parts (A / B) entre Ba et Djibril, inversees chaque jour */
@@ -631,6 +671,7 @@ function vTableau(){
   const todosDemain = todosFor(demain);
   const intr = intrantsAVenir();
   return `
+  ${carteVisite()}
   <div class="cards2">
     <div class="card"><h3>Récolte cette semaine</h3><div class="kpi">${REC_FMT.format(Math.round(kgS))} <small>kg</small></div>
       <div class="kpi-sub">objectif ≈ ${obj} kg/sem ${kgS>=obj?'<span class="pill ok">atteint</span>':''}</div></div>
@@ -1148,6 +1189,13 @@ function wire(){
     if (!row){ render(); return; }
     S[col].splice(+i, 1);
     render(); delRow(col, row); toast('Saisie annulée');
+  }));
+  /* v13 : cocher / decocher une tache de visite de Mansour */
+  document.querySelectorAll('[data-vk]').forEach(b=>b.addEventListener('click', ()=>{
+    const all = VISITE_MANSOUR.groupes.flatMap(g=>g[1]); const t = all[+b.dataset.vk]; if (!t) return;
+    const ex = visiteFaite(t);
+    if (ex){ S.ops.splice(S.ops.indexOf(ex), 1); render(); delRow('ops', ex); toast('Tâche décochée'); }
+    else record('ops', {d:today(), type:'Tâche', culture:'Visite', detail:t, qui:'Mansour', par:USER}, 'Tâche faite');
   }));
   /* v7 : cocher / decocher une tache du jour */
   document.querySelectorAll('[data-tk]').forEach(b=>b.addEventListener('click', ()=>{
