@@ -6,7 +6,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <title>KLM App — Keur Lemou</title>
-<!-- build v14 : missions nominatives (visite du 10/10 : citronniers partages Ba / Djibril, cocotiers, basilic, filet) + soufre mouillable ; v13 : mise a jour automatique de l'appli sur les telephones ; v12 : taches du jour precises et reparties Ba / Djibril (inversees chaque jour) + achats (expression des besoins) dans Materiel ; v11 : utilisateur Observateur (code lecture seule) ; v10 2026-10 : version autonome (Google Sheets + Apps Script), sans Claude ; base v9 2026-10-03 : annuler une saisie + bouton Sortir ; v8 (donnees remises a zero) : taches non prevues par espece (obligatoire) + fertilisation/desherbage/semis/pepiniere/triage/conditionnement/conservation + tout signalement a regler (bouton regler) -->
+<!-- build v15 : missions dynamiques (lignes ops type Mission ajoutees sans redeployer) ; v14 : missions nominatives (visite du 10/10 : citronniers partages Ba / Djibril, cocotiers, basilic, filet) + soufre mouillable ; v13 : mise a jour automatique de l'appli sur les telephones ; v12 : taches du jour precises et reparties Ba / Djibril (inversees chaque jour) + achats (expression des besoins) dans Materiel ; v11 : utilisateur Observateur (code lecture seule) ; v10 2026-10 : version autonome (Google Sheets + Apps Script), sans Claude ; base v9 2026-10-03 : annuler une saisie + bouton Sortir ; v8 (donnees remises a zero) : taches non prevues par espece (obligatoire) + fertilisation/desherbage/semis/pepiniere/triage/conditionnement/conservation + tout signalement a regler (bouton regler) -->
 <link rel="icon" type="image/png" href="icon-192.png">
 <meta name="theme-color" content="#1e4d2b">
 <meta name="apple-mobile-web-app-title" content="KLM App">
@@ -378,7 +378,9 @@ function outLoad(){ try{ return JSON.parse(localStorage.getItem(OUTBOX_KEY)||'[]
 function outSave(q){ try{ localStorage.setItem(OUTBOX_KEY, JSON.stringify(q)); }catch(e){ toast('Mémoire du téléphone pleine — envoie tes saisies dès que possible'); } }
 function saveCache(){ try{ localStorage.setItem(CACHE_KEY, JSON.stringify(S)); }catch(e){} }
 function emptyState(){ return {v:1, recoltes:[], ventes:[], ops:[], attaques:[], scans:[], inventaire:[], achats:[]}; }
-function normState(st){ const e = emptyState(); for (const k of Object.keys(e)) if (Array.isArray(st && st[k])) e[k] = st[k]; return e; }
+function normState(st){ const e = emptyState(); for (const k of Object.keys(e)) if (Array.isArray(st && st[k])) e[k] = st[k]; if (st && Array.isArray(st.mdyn)) e.ops = e.ops.concat(st.mdyn); return e; }
+/* v15 : les missions dynamiques (ops type Mission) sont sorties de S.ops pour ne pas polluer journal/rapport */
+function splitMissions(st){ st.mdyn = st.ops.filter(o=>o.type==='Mission'); st.ops = st.ops.filter(o=>o.type!=='Mission'); return st; }
 function applyOps(st, ops){
   for (const o of ops){
     const L = st[o.col]; if (!L) continue;
@@ -426,7 +428,7 @@ function applyRole(){ document.body.classList.toggle('ro', READONLY);
   updateBanner(); }
 function adopt(state){
   const q = outLoad();
-  S = applyOps(normState(state), q);
+  S = splitMissions(applyOps(normState(state), q));
   saveCache(); LAST_SYNC = new Date(); NET = 'ok';
 }
 async function flush(){
@@ -527,16 +529,26 @@ MISSIONS.push(
   {du:'2026-10-11', qui:'Djibril', b:'Basilic — récolter et pincer toutes les fleurs ; repiquer les semis spontanés en pépinière', why:'un basilic en fleurs s’épuise et monte en graine'},
   {du:'2026-10-11', qui:'Djibril', b:'Filet de la culture protégée — refermer le côté ouvert et enterrer le bas du filet', why:'aucune entrée possible pour les insectes'},
   {du:'2026-10-11', qui:'Djibril', b:'Agrume aux jeunes feuilles enroulées — regarder sous les feuilles (pucerons, galeries de mineuse) + photo', why:'si pucerons : savon noir + neem le soir même'},
-  {du:'2026-10-14', qui:'Djibril', b:'Jeunes arbres sous trépied (agrumes, manguier…) — désherber et reformer les cuvettes', why:'cuvette ronde et propre comme celle du manguier'}
+  {du:'2026-10-14', qui:'Djibril', b:'Jeunes arbres sous trépied (agrumes, manguier…) — désherber et reformer les cuvettes', why:'cuvette ronde et propre comme celle du manguier'},
+  /* visite du 17/10 : saisies manquantes, attaques ouvertes, zone aromatique */
+  {du:'2026-10-18', qui:'Ba', b:'Saisir dans l’appli les 36 plateaux de la pépinière — 1 saisie « Pépinière » par plateau', why:'espèce + nombre d’alvéoles + date de semis ; Mansour a compté 36 plateaux, l’appli n’en voit que 4'},
+  {du:'2026-10-18', qui:'Djibril', b:'Saisir dans l’appli les 21 planches de semis direct — 1 saisie « Semis » par planche', why:'espèce + longueur de planche + date ; Mansour a compté 21 planches, l’appli n’en voit que 6'},
+  {du:'2026-10-18', qui:'Ba', b:'Attaques ouvertes — chenilles sur laitue + scan citron caviar + scan « à identifier » du 10/10 : traiter puis « régler »', why:'chenilles : ramasser + Bt ou neem le soir ; scans : regarder la photo, traiter ou clôturer avec une note'},
+  {du:'2026-10-18', qui:'Djibril', b:'Attaques ouvertes — criquets sur gombo + scan citron lime + scan « à identifier » du 11/10 : traiter puis « régler »', why:'criquets : ramassage tôt le matin + neem ; scans : regarder la photo, traiter ou clôturer avec une note'},
+  {du:'2026-10-18', qui:'Ba', b:'Zone aromatique — compléter le carré central sous cadre avec le basilic de la pépinière', why:'compost avant repiquage, arrosage de reprise, paillage ; enregistrer en Plantation'},
+  {du:'2026-10-18', qui:'Djibril', b:'Zone aromatique — carré du fond (vide) : semis direct coriandre + persil en lignes', why:'lignes à 20 cm, terre fine + compost, voile d’ombrage tendu sur le cadre jusqu’à la levée ; enregistrer en Semis'},
+  {du:'2026-10-19', qui:'Ba', b:'Zone aromatique — pneus vides : terre + compost, puis planter la menthe (boutures ou plants)', why:'la menthe envahit tout : elle reste dans les pneus ; enregistrer en Plantation'},
+  {du:'2026-10-19', qui:'Djibril', b:'Zone aromatique — carré du fond à droite : semis ciboulette (ou oignon vert) + aneth', why:'si une semence manque : demande d’achat dans Matériel ; enregistrer en Semis'}
 );
+function allMissions(){ return MISSIONS.concat((S.mdyn||[]).map(r=>({du:r.du||r.d, qui:r.qui, b:r.b||r.detail, why:r.why||'', int:r.int||''}))); }
 function isoD(d){ return new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate())).toISOString().slice(0,10); }
 function missionFaiteAvant(m, ds){ return S.ops.find(o=>o.type==='Tâche' && o.detail===m.b && o.d<ds); }
 function missionsFor(d){
   const ds = isoD(d);
-  return MISSIONS.filter(m=>m.du<=ds && !missionFaiteAvant(m, ds)).map(m=>({cls:'w', b:m.b, mis:true, qui:m.qui, int:m.int||'',
+  return allMissions().filter(m=>m.du<=ds && !missionFaiteAvant(m, ds)).map(m=>({cls:'w', b:m.b, mis:true, qui:m.qui, int:m.int||'',
     why:'📌 mission'+(m.du<ds?' — à faire depuis le '+fmtD(m.du):'')+' · '+m.why}));
 }
-function missionsEnRetard(){ const t = today(); return MISSIONS.filter(m=>m.du<t && !S.ops.find(o=>o.type==='Tâche' && o.detail===m.b)); }
+function missionsEnRetard(){ const t = today(); return allMissions().filter(m=>m.du<t && !S.ops.find(o=>o.type==='Tâche' && o.detail===m.b)); }
 /* v13 : taches de Mansour pour sa visite (rapport semaine 2) — visibles seulement par Mansour, dans Tableau */
 const VISITE_MANSOUR = {du:'2026-10-16', au:'2026-10-25', titre:'Visite du 17/10 — rapport semaine 2', groupes:[
  ['Sur le terrain', [
@@ -1378,7 +1390,7 @@ else if (USER){ document.getElementById('userchip').textContent = USER;
   TAB = (USER==='Madame') ? 'vente' : (isTech(USER) ? 'journal' : 'tb'); }
 else { document.getElementById('userchip').textContent = 'moi ?'; setTimeout(()=>{ try{ if (!READONLY) document.getElementById('whodlg').showModal(); }catch(e){} }, 1500); }
 /* cache local : l'appli s'ouvre instantanement, meme sans reseau */
-try{ const c = JSON.parse(localStorage.getItem(CACHE_KEY)||'null'); if (c) S = applyOps(normState(c), outLoad()); }catch(e){}
+try{ const c = JSON.parse(localStorage.getItem(CACHE_KEY)||'null'); if (c) S = splitMissions(applyOps(normState(c), outLoad())); }catch(e){}
 document.getElementById('pinform').addEventListener('submit', ()=>{
   PIN = (document.getElementById('pininput').value||'').trim();
   try{ localStorage.setItem(PIN_KEY, PIN); }catch(e){}
