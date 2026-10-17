@@ -6,7 +6,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <title>KLM App — Keur Lemou</title>
-<!-- build v15 : missions dynamiques (lignes ops type Mission ajoutees sans redeployer) ; v14 : missions nominatives (visite du 10/10 : citronniers partages Ba / Djibril, cocotiers, basilic, filet) + soufre mouillable ; v13 : mise a jour automatique de l'appli sur les telephones ; v12 : taches du jour precises et reparties Ba / Djibril (inversees chaque jour) + achats (expression des besoins) dans Materiel ; v11 : utilisateur Observateur (code lecture seule) ; v10 2026-10 : version autonome (Google Sheets + Apps Script), sans Claude ; base v9 2026-10-03 : annuler une saisie + bouton Sortir ; v8 (donnees remises a zero) : taches non prevues par espece (obligatoire) + fertilisation/desherbage/semis/pepiniere/triage/conditionnement/conservation + tout signalement a regler (bouton regler) -->
+<!-- build v16 : note + photo sur une tache cochee (demande de Ba) ; v15 : missions dynamiques (lignes ops type Mission ajoutees sans redeployer) ; v14 : missions nominatives (visite du 10/10 : citronniers partages Ba / Djibril, cocotiers, basilic, filet) + soufre mouillable ; v13 : mise a jour automatique de l'appli sur les telephones ; v12 : taches du jour precises et reparties Ba / Djibril (inversees chaque jour) + achats (expression des besoins) dans Materiel ; v11 : utilisateur Observateur (code lecture seule) ; v10 2026-10 : version autonome (Google Sheets + Apps Script), sans Claude ; base v9 2026-10-03 : annuler une saisie + bouton Sortir ; v8 (donnees remises a zero) : taches non prevues par espece (obligatoire) + fertilisation/desherbage/semis/pepiniere/triage/conditionnement/conservation + tout signalement a regler (bouton regler) -->
 <link rel="icon" type="image/png" href="icon-192.png">
 <meta name="theme-color" content="#1e4d2b">
 <meta name="apple-mobile-web-app-title" content="KLM App">
@@ -336,6 +336,7 @@ function optsZ(sel){
 }
 let EXTRA = null;      // tache non prevue ouverte
 let TR_SEL = [];       // cultures choisies pour un traitement
+let TK_NOTE = null, TK_IMG = null, TK_TXT = '';   // v16 : note/photo de la tache cochee en cours d'edition
 let TACHES_CUR = [];   // liste cochable affichee
 let DET_OPEN = false;
 let DEL = null;   // saisie en attente de confirmation d'annulation ('ops:3')
@@ -771,11 +772,21 @@ function vJournal(){
   if (TECH) TACHES_CUR.sort((a,b)=>(a.qui===USER?0:1)-(b.qui===USER?0:1));   // mes taches d'abord
   const ROUT = TACHES_CUR.filter(t=>!t.cal && (!TECH || t.qui===USER)), nCal = TACHES_CUR.filter(t=>t.cal && tacheFaite(today(), t.b)).length;
   const nFait = ROUT.filter(t=>tacheFaite(today(), t.b)).length;
+  /* v16 : apres avoir coche, ajouter une remarque (nombre de semis, taille du plateau…) et/ou une photo */
+  const tkNoteUI = (t, f, i)=>{
+    if (!f || READONLY || !(f.par===USER || USER==='Mansour')) return '';
+    const ph = f.img ? '<img src="'+esc(f.img)+'" alt="photo" loading="lazy" style="height:56px;border-radius:8px;margin-top:6px">' : '';
+    if (TK_NOTE!==t.b) return ph + '<div><button type="button" class="btn small ghost" data-tknote="'+i+'" style="margin-top:6px">'+(f.note||f.img ? '✏️ Modifier note / photo' : '📝 Ajouter une note ou 📷 une photo')+'</button></div>';
+    const prev = TK_IMG || f.img;
+    return '<div class="xform" style="margin-top:8px"><div class="f"><label>Remarque (facultatif)</label><input id="tknote-txt" value="'+esc(TK_TXT)+'" placeholder="ex : 2 plateaux de 104 alvéoles, 208 semis de basilic"></div>'+
+      '<div class="btnrow"><button type="button" class="btn ghost small" data-tkph="1">📷 '+(prev?'Changer la photo':'Ajouter une photo')+'</button>'+(prev?'<img src="'+esc(prev)+'" alt="aperçu" style="height:56px;border-radius:8px">':'')+'</div>'+
+      '<div class="btnrow"><button type="button" class="btn small" data-tksave="'+i+'">Enregistrer</button><button type="button" class="btn small ghost" data-tkcancel="1">✕ Fermer</button></div></div>';
+  };
   const li = (t,i)=>{ const f = tacheFaite(today(), t.b); const autre = TECH && t.qui!==USER;
     return '<li class="'+(f?'done':'')+'"'+(autre?' style="opacity:.55"':'')+'>'+(autre
       ? '<span class="ck'+(f?' on':'')+'" style="display:flex;align-items:center;justify-content:center;cursor:default" aria-hidden="true">'+(f?'✓':'')+'</span>'
       : '<button type="button" class="ck'+(f?' on':'')+'" data-tk="'+i+'" aria-pressed="'+(f?'true':'false')+'" aria-label="'+esc(t.b)+'">'+(f?'✓':'')+'</button>')+
-      '<div><b>'+esc(t.b)+'</b> <span class="pill '+(t.qui===USER?'ok':'')+'" style="'+(t.qui===USER?'':'border:1px solid var(--line)')+'">👤 '+esc(t.qui||'')+'</span><div class="why">'+(f? 'fait par '+esc(f.par||'?') : esc(t.why))+'</div></div></li>'; };
+      '<div><b>'+esc(t.b)+'</b> <span class="pill '+(t.qui===USER?'ok':'')+'" style="'+(t.qui===USER?'':'border:1px solid var(--line)')+'">👤 '+esc(t.qui||'')+'</span><div class="why">'+(f? 'fait par '+esc(f.par||'?')+(f.note?' · 📝 <strong>'+esc(f.note)+'</strong>':'') : esc(t.why))+'</div>'+tkNoteUI(t, f, i)+'</div></li>'; };
   const chk = TACHES_CUR.map((t,i)=>t.cal?'':li(t,i)).join('');
   const chkCal = TACHES_CUR.map((t,i)=>t.cal?li(t,i):'').join('');
   /* v8 : tache non prevue — espece obligatoire */
@@ -922,6 +933,7 @@ function buildReport(){
   const joursTk = {}; for (const o of tk) joursTk[o.d] = (joursTk[o.d]||0)+1;
   L.push('TACHES DU JOUR COCHEES : ' + tk.length + (tk.length ? ' (' + Object.entries(joursTk).map(([d,n])=>fmtD(d)+' : '+n).join(' · ') + ')' : ''));
   if (tk.length) L.push('  - ' + TECHS.map(n=>n+' : '+tk.filter(o=>o.par===n).length).join(' · '));
+  for (const o of tk.filter(o=>o.note || o.img)) L.push('  📝 ' + fmtD(o.d) + ' ' + (o.par||'') + ' — ' + (o.detail||'').split(' — ')[0] + (o.note ? ' : ' + o.note : '') + (o.img ? ' (photo)' : ''));
   const mr = missionsEnRetard();
   L.push('MISSIONS NON FAITES : ' + (mr.length ? mr.length : 'aucune'));
   for (const m of mr) L.push('  - ' + m.qui + ' : ' + m.b + ' (depuis le ' + fmtD(m.du) + ')');
@@ -1217,7 +1229,23 @@ function wire(){
     if (ex){
       S.ops.splice(S.ops.indexOf(ex), 1);
       render(); delRow('ops', ex); toast('Tâche décochée');
-    } else record('ops', {d:ds, type:'Tâche', culture:'Routine', detail:t.b, qui:t.qui||'', par:USER}, '✓ '+t.b);
+    } else { TK_NOTE = t.b; TK_IMG = null; TK_TXT = ''; record('ops', {d:ds, type:'Tâche', culture:'Routine', detail:t.b, qui:t.qui||'', par:USER}, '✓ '+t.b+' — ajoute une note ou une photo si besoin'); }
+  }));
+  /* v16 : note / photo sur tache cochee */
+  const tkTxtSync = ()=>{ const e = document.getElementById('tknote-txt'); if (e) TK_TXT = e.value; };
+  document.querySelectorAll('[data-tknote]').forEach(b=>b.addEventListener('click', ()=>{
+    const t = TACHES_CUR[+b.dataset.tknote]; if (!t) return; const f = tacheFaite(today(), t.b);
+    TK_NOTE = t.b; TK_IMG = null; TK_TXT = (f && f.note) || ''; render();
+  }));
+  document.querySelectorAll('[data-tkph]').forEach(b=>b.addEventListener('click', ()=>{
+    tkTxtSync(); openCapture(img=>{ TK_IMG = img; render(); toast('Photo ajoutée — appuie sur Enregistrer'); }, 640, 0.6);
+  }));
+  document.querySelectorAll('[data-tkcancel]').forEach(b=>b.addEventListener('click', ()=>{ TK_NOTE = null; TK_IMG = null; TK_TXT = ''; render(); }));
+  document.querySelectorAll('[data-tksave]').forEach(b=>b.addEventListener('click', ()=>{
+    tkTxtSync(); const t = TACHES_CUR[+b.dataset.tksave]; const f = t && tacheFaite(today(), t.b); if (!f) return;
+    f.note = TK_TXT.trim(); if (TK_IMG) f.img = TK_IMG;
+    TK_NOTE = null; TK_IMG = null; TK_TXT = '';
+    render(); putRow('ops', f); toast('Note enregistrée ✓');
   }));
   /* v7 : taches non prevues */
   document.querySelectorAll('[data-x]').forEach(b=>b.addEventListener('click', ()=>{
