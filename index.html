@@ -6,7 +6,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <title>KLM App — Keur Lemou</title>
-<!-- build v16 : note + photo sur une tache cochee (demande de Ba) ; v15 : missions dynamiques (lignes ops type Mission ajoutees sans redeployer) ; v14 : missions nominatives (visite du 10/10 : citronniers partages Ba / Djibril, cocotiers, basilic, filet) + soufre mouillable ; v13 : mise a jour automatique de l'appli sur les telephones ; v12 : taches du jour precises et reparties Ba / Djibril (inversees chaque jour) + achats (expression des besoins) dans Materiel ; v11 : utilisateur Observateur (code lecture seule) ; v10 2026-10 : version autonome (Google Sheets + Apps Script), sans Claude ; base v9 2026-10-03 : annuler une saisie + bouton Sortir ; v8 (donnees remises a zero) : taches non prevues par espece (obligatoire) + fertilisation/desherbage/semis/pepiniere/triage/conditionnement/conservation + tout signalement a regler (bouton regler) -->
+<!-- build v17 : ventes = quantite x prix unitaire (total automatique) + Samba : 3 boutons photo (probleme vu / repare / travail fait) ; v16 : note + photo sur une tache cochee (demande de Ba) ; v15 : missions dynamiques (lignes ops type Mission ajoutees sans redeployer) ; v14 : missions nominatives (visite du 10/10 : citronniers partages Ba / Djibril, cocotiers, basilic, filet) + soufre mouillable ; v13 : mise a jour automatique de l'appli sur les telephones ; v12 : taches du jour precises et reparties Ba / Djibril (inversees chaque jour) + achats (expression des besoins) dans Materiel ; v11 : utilisateur Observateur (code lecture seule) ; v10 2026-10 : version autonome (Google Sheets + Apps Script), sans Claude ; base v9 2026-10-03 : annuler une saisie + bouton Sortir ; v8 (donnees remises a zero) : taches non prevues par espece (obligatoire) + fertilisation/desherbage/semis/pepiniere/triage/conditionnement/conservation + tout signalement a regler (bouton regler) -->
 <link rel="icon" type="image/png" href="icon-192.png">
 <meta name="theme-color" content="#1e4d2b">
 <meta name="apple-mobile-web-app-title" content="KLM App">
@@ -749,7 +749,7 @@ function vPlan(){
 function vJournal(){
   const rows = S.ops.filter(o=>o.type!=='Tâche').slice(-25).reverse().map(o=>{
     const i = S.ops.indexOf(o);
-    return '<tr><td>'+fmtD(o.d)+'</td><td>'+esc(o.type)+'</td><td>'+esc(o.culture)+'</td><td>'+esc(o.detail||'')+'</td><td class="muted">'+esc(o.par||'')+'</td>'+
+    return '<tr><td>'+fmtD(o.d)+'</td><td>'+esc(o.type)+'</td><td>'+esc(o.culture)+'</td><td>'+esc(o.detail||'')+(o.img?' <a href="'+esc(o.img)+'" target="_blank" rel="noopener">📷</a>':'')+'</td><td class="muted">'+esc(o.par||'')+'</td>'+
       '<td style="white-space:nowrap"><button class="btn small ghost" data-refill="'+i+'" title="reprendre cette saisie">↻</button> '+btnDel('ops:'+i,o)+'</td></tr>';
   }).join('');
   const opsJour = S.ops.filter(o=>o.d===today());
@@ -887,7 +887,7 @@ function vVentes(){
   for (const v of S.ventes){ tot[v.produit] = (tot[v.produit]||0) + (+v.montant||0); }
   const top = Object.entries(tot).sort((a,b)=>b[1]-a[1]).slice(0,5);
   const rows = S.ventes.slice(-30).reverse().map(v=>
-    '<tr><td>'+fmtD(v.d)+'</td><td>'+esc(v.produit)+'</td><td class="num">'+esc(v.qte)+'</td><td class="num">'+REC_FMT.format(+v.montant||0)+'</td><td>'+esc(v.client||'')+'</td></tr>').join('');
+    '<tr><td>'+fmtD(v.d)+'</td><td>'+esc(v.produit)+'</td><td class="num">'+esc(v.qte)+(v.unite?' '+esc(v.unite):'')+(v.pu?'<div class="muted" style="font-size:.78rem">× '+REC_FMT.format(+v.pu)+'</div>':'')+'</td><td class="num">'+REC_FMT.format(+v.montant||0)+'</td><td>'+esc(v.client||'')+'</td></tr>').join('');
   return `
   <div class="cards2">
     <div class="card"><h3>Ce mois</h3><div class="kpi">${REC_FMT.format(fcfaMonth())} <small>FCFA</small></div></div>
@@ -900,8 +900,12 @@ function vVentes(){
         <div class="f"><label>Produit</label><select name="produit">${optsG()}</select></div>
       </div>
       <div class="grid3">
-        <div class="f"><label>Quantité</label><input name="qte" placeholder="ex : 12 kg / 30 bottes"></div>
-        <div class="f"><label>Montant (FCFA)</label><input type="number" step="1" min="0" name="montant" required inputmode="numeric"></div>
+        <div class="f"><label>Quantité</label><input type="number" step="any" min="0" name="qte" id="v-qte" required inputmode="decimal" placeholder="ex : 12"></div>
+        <div class="f"><label>Unité</label><select name="unite">${['kg','pièce','botte','sac','plateau','litre','douzaine'].map(u=>'<option>'+u+'</option>').join('')}</select></div>
+        <div class="f"><label>Prix unitaire (FCFA)</label><input type="number" step="1" min="0" name="pu" id="v-pu" required inputmode="numeric" placeholder="ex : 250"></div>
+      </div>
+      <div class="grid2">
+        <div class="f"><label>Total (calculé)</label><div id="v-total" class="kpi" style="font-size:1.5rem">0 <small>FCFA</small></div></div>
         <div class="f"><label>Client</label><input name="client" placeholder="ex : bana-bana Mboro"></div>
       </div>
       <button class="btn">Enregistrer la vente</button>
@@ -943,7 +947,7 @@ function buildReport(){
   const opsX = ops.filter(o=>o.type!=='Tâche' && o.type!=='Traitement');
   L.push('');
   L.push('AUTRES OPERATIONS (' + opsX.length + ') :');
-  for (const o of opsX) L.push('  - ' + fmtD(o.d) + ' ' + o.type + ' ' + o.culture + (o.detail? ' — '+o.detail : ''));
+  for (const o of opsX) L.push('  - ' + fmtD(o.d) + ' ' + o.type + ' ' + o.culture + (o.detail? ' — '+o.detail : '') + (o.img ? ' (photo)' : ''));
   L.push('');
   const ao = attaquesOuvertes();
   L.push('ATTAQUES : ' + (att.length ? att.map(a=>a.ravageur+' sur '+a.culture+' (G'+a.gravite+')').join(' ; ') : 'rien de nouveau'));
@@ -1010,12 +1014,14 @@ const SAMBA_BTNS = [
  ['animal','🐐','Animal entré','ops',{type:'Signalement',culture:'Ferme',detail:'animal entré dans la ferme'}],
  ['fuite','💦','Fuite d\'eau','ops',{type:'Signalement',culture:'Eau',detail:'fuite d\'eau vue'}],
  ['casse','🔧','Quelque chose de cassé','ops',{type:'Signalement',culture:'Matériel',detail:'matériel cassé / à réparer'}],
- ['photo','📷','Prendre une photo','photo',null]
+ ['pano','⚠️','📷 Photo : problème vu','pano',null],
+ ['prep','✅','📷 Photo : réparé / corrigé','pfait',{type:'Entretien',culture:'Ferme',detail:'réparation / correction faite (photo de Samba)'}],
+ ['ptrav','🛠️','📷 Photo : travail fait','pfait',{type:'Entretien',culture:'Ferme',detail:'nouveau travail fait (photo de Samba)'}]
 ];
 function vSamba(){
   return '<div class="sect card" style="text-align:center"><h2 style="font-size:1.1rem">🔦 📷 Samba</h2>'+
    '<p class="muted" style="font-size:.85rem;margin:4px 0 0">Appuie sur l\'image de ce que tu as fait ou vu</p></div>'+
-   '<div class="sgrid">'+SAMBA_BTNS.map(b=>'<button class="sbtn" data-samba="'+b[0]+'"><span class="pic">'+b[1]+'</span><span class="lbl">'+b[2]+'</span></button>').join('')+'</div>';
+   '<div class="sgrid">'+SAMBA_BTNS.filter(b=>/^p/.test(b[3])).concat(SAMBA_BTNS.filter(b=>!/^p/.test(b[3]))).map(b=>'<button class="sbtn" data-samba="'+b[0]+'"><span class="pic">'+b[1]+'</span><span class="lbl">'+b[2]+'</span></button>').join('')+'</div>';
 }
 function sambaOk(pic){
   const o = document.getElementById('sok'); document.getElementById('sokm').textContent = pic;
@@ -1361,14 +1367,22 @@ function wire(){
   const fv = document.getElementById('f-vente');
   if (fv) fv.addEventListener('submit', e=>{
     e.preventDefault(); const f = new FormData(fv);
-    record('ventes', {d:f.get('d'), produit:f.get('produit'), qte:f.get('qte'), montant:+f.get('montant'), client:f.get('client'), par:USER}, 'Vente enregistrée');
+    const q = +f.get('qte')||0, pu = +f.get('pu')||0, mt = Math.round(q*pu);
+    if (!mt){ toast('Indique la quantité et le prix unitaire'); return; }
+    record('ventes', {d:f.get('d'), produit:f.get('produit'), qte:q, unite:f.get('unite'), pu, montant:mt, client:f.get('client'), par:USER}, 'Vente enregistrée : '+REC_FMT.format(mt)+' FCFA');
   });
+  /* v17 : total = quantite x prix unitaire, en direct */
+  const vq = document.getElementById('v-qte'), vp = document.getElementById('v-pu'), vt = document.getElementById('v-total');
+  if (vq && vp && vt){ const upd = ()=>{ vt.innerHTML = REC_FMT.format(Math.round((+vq.value||0)*(+vp.value||0)))+' <small>FCFA</small>'; }; vq.addEventListener('input', upd); vp.addEventListener('input', upd); }
   const bs = document.getElementById('btn-scan');
   if (bs) bs.addEventListener('click', openScan);
   document.querySelectorAll('[data-samba]').forEach(b=>b.addEventListener('click', ()=>{
     const def = SAMBA_BTNS.find(x=>x[0]===b.dataset.samba);
     if (!def) return;
     if (def[3]==='photo'){ openScan(); return; }
+    /* v17 : photo directe, sans question : 1 bouton = 1 photo enregistree */
+    if (def[3]==='pano'){ openCapture(img=>{ sambaOk('⚠️ ✅'); while (S.scans.length >= 60) S.scans.shift(); record('scans', {d:today(), type:'ano', culture:'', note:'problème vu par Samba (photo)', par:USER, img}, 'Photo envoyée'); }, 640, 0.6); return; }
+    if (def[3]==='pfait'){ openCapture(img=>{ sambaOk(def[1]+' ✅'); record('ops', Object.assign({d:today(), par:USER, img}, def[4]), 'Photo envoyée'); }, 640, 0.6); return; }
     sambaOk(def[1]+' ✅');
     if (def[3]==='att'){ const a = Object.assign({d:today(), action:'à vérifier par un technicien', resolu:false, par:USER}, def[4]); record('attaques', a, 'Signalement envoyé'); }
     else { const o = Object.assign({d:today(), par:USER}, def[4]); record('ops', o, 'Bien noté'); }
