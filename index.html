@@ -6,7 +6,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <title>KLM App — Keur Lemou</title>
-<!-- build v17 : ventes = quantite x prix unitaire (total automatique) + Samba : 3 boutons photo (probleme vu / repare / travail fait) ; v16 : note + photo sur une tache cochee (demande de Ba) ; v15 : missions dynamiques (lignes ops type Mission ajoutees sans redeployer) ; v14 : missions nominatives (visite du 10/10 : citronniers partages Ba / Djibril, cocotiers, basilic, filet) + soufre mouillable ; v13 : mise a jour automatique de l'appli sur les telephones ; v12 : taches du jour precises et reparties Ba / Djibril (inversees chaque jour) + achats (expression des besoins) dans Materiel ; v11 : utilisateur Observateur (code lecture seule) ; v10 2026-10 : version autonome (Google Sheets + Apps Script), sans Claude ; base v9 2026-10-03 : annuler une saisie + bouton Sortir ; v8 (donnees remises a zero) : taches non prevues par espece (obligatoire) + fertilisation/desherbage/semis/pepiniere/triage/conditionnement/conservation + tout signalement a regler (bouton regler) -->
+<!-- build v18 : liste de visite de Mansour (novembre, mi-parcours) ; v17 : ventes = quantite x prix unitaire (total automatique) + Samba : 3 boutons photo (probleme vu / repare / travail fait) ; v16 : note + photo sur une tache cochee (demande de Ba) ; v15 : missions dynamiques (lignes ops type Mission ajoutees sans redeployer) ; v14 : missions nominatives (visite du 10/10 : citronniers partages Ba / Djibril, cocotiers, basilic, filet) + soufre mouillable ; v13 : mise a jour automatique de l'appli sur les telephones ; v12 : taches du jour precises et reparties Ba / Djibril (inversees chaque jour) + achats (expression des besoins) dans Materiel ; v11 : utilisateur Observateur (code lecture seule) ; v10 2026-10 : version autonome (Google Sheets + Apps Script), sans Claude ; base v9 2026-10-03 : annuler une saisie + bouton Sortir ; v8 (donnees remises a zero) : taches non prevues par espece (obligatoire) + fertilisation/desherbage/semis/pepiniere/triage/conditionnement/conservation + tout signalement a regler (bouton regler) -->
 <link rel="icon" type="image/png" href="icon-192.png">
 <meta name="theme-color" content="#1e4d2b">
 <meta name="apple-mobile-web-app-title" content="KLM App">
@@ -551,31 +551,35 @@ function missionsFor(d){
 }
 function missionsEnRetard(){ const t = today(); return allMissions().filter(m=>m.du<t && !S.ops.find(o=>o.type==='Tâche' && o.detail===m.b)); }
 /* v13 : taches de Mansour pour sa visite (rapport semaine 2) — visibles seulement par Mansour, dans Tableau */
-const VISITE_MANSOUR = {du:'2026-10-16', au:'2026-10-25', titre:'Visite du 17/10 — rapport semaine 2', groupes:[
- ['Sur le terrain', [
-  'Pépinière : compter alvéoles et pots de chaque lot (tomate, choux, laitues, brocoli, poireau, céleri, aubergine, poivron, basilic, menthe)',
-  'Poireau : vérifier s’il a vraiment été semé (coché le 10/10 par Ba, semences encore demandées le 13/10)',
-  'Tomate, choux, maïs-tournesol : un lot ou deux ? (cochés par Ba ET Djibril)',
-  'Planches : levée radis, maïs, concombre, roquette, bok choy + reprise des laitues plantées le 12/10',
-  'Citronniers : bois mort coupé, cuvettes propres et paillées, attaches souples, rubans bleu/rouge',
-  'Citron caviar : examiner les lésions (chancre possible) et décider',
-  'Filet de la culture protégée : fermé et enterré',
-  'Mesurer la surface des hors-sol pour la toile anti-insectes',
-  'Kola du lion : graine ferme, terre humide, à l’ombre']],
+const VISITE_MANSOUR = {du:'2026-11-06', au:'2026-11-16', titre:'Visite de mi-parcours — novembre 2026', groupes:[
+ ['Pépinière (36 plateaux au 18/10 + semis suivants)', [
+  'Compter les plateaux encore en pépinière : brocoli, céleri, poireau, oignon (5), derniers choux, tomate du 23/10, boutures romarin et citronnelle',
+  'Plateaux sans levée (piment, basilic ×2, fruit du dragon) : ressemés ou vidés ?',
+  'Poireau : y a-t-il vraiment des plants ?',
+  'Tomate et choux cochés par Ba ET Djibril : un lot ou deux ?',
+  'Oignon : seulement 5 plateaux, pas de Violet de Galmi → décider l’achat des semences']],
+ ['Planches (21 au 18/10 + ajouts)', [
+  'Compter les planches occupées : au moins 25 à 28 attendues',
+  'Numéros des planches navet-carotte (26 et 28/10) et melon-pastèque (26/10, 28/10, 4/11)',
+  '7 planches du 2e carré (préparées le 2/11) : semées ? avec quoi ?',
+  '1er carré côté case du chien (préparé le 3/11) : prévu pour quoi ?',
+  'Levée de chaque planche et trous à ressemer']],
+ ['Récoltes — urgent', [
+  'Radis des planches 3, 8 et 10 : récolter et PESER devant moi',
+  'Montrer à Ba comment saisir une récolte (espèce + kg)',
+  'Roquette, bok choy, mâche et laitues plantées le 12/10 : date de la 1re récolte']],
+ ['Autres zones', [
+  'Hors-sol (gombo, concombre) : mesurer la surface pour la toile anti-insectes',
+  'Zone aromatique : levée du basilic, de la coriandre, du persil, de la menthe, de la ciboulette et de l’aneth',
+  'Agrumes et manguier plantés le 22/10 : reprise ; citronniers en fleurs',
+  'Local technique : inspection des abords']],
  ['Avec l’équipe', [
-  'Féliciter Ba et Djibril : 7 jours sur 7',
-  'Djibril : traitement choux-concombre du lundi 12/10 oublié',
-  'Tous : saisir chaque traitement (soufre compris) dans « Traitement »',
-  'Tous : quantité pour chaque semis, culture + note pour chaque photo',
-  'Ba : compléter les 4 photos du 11/10 sans culture ni note',
-  'Madame : unités et prix de la papaye, saisir la récolte des citrons',
-  'Samba : reprendre la saisie simple (tour de garde, portail fermé)',
-  'Lancer l’inventaire du matériel',
-  'Régler les attaques et photos en attente']],
- ['À apporter', [
-  '100 sachets hors-sol',
-  'Semences : haricot, épinard, poireau, haricot ailé, laitue + romaine',
-  'Bt contre les chenilles']]
+  'Entretien individuel avec Ba + signature de sa fiche',
+  'Entretien individuel avec Djibril + signature de sa fiche',
+  'Entretien individuel avec Samba + signature de sa fiche',
+  'Afficher et expliquer la répartition des tâches',
+  'Samba : remettre les clés du local technique + 2 boutons chaque soir (garde, portail)',
+  'Mme Fall : confirmer les ventes du 12/10 (4 000 et 11 000 FCFA ?)']]
 ]};
 function visiteFaite(b){ return S.ops.find(o=>o.type==='Tâche' && o.culture==='Visite' && o.detail===b); }
 function carteVisite(){
